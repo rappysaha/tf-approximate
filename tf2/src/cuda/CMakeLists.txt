@@ -35,5 +35,6 @@ endforeach()
 add_definitions(-DGOOGLE_CUDA=1 -DNDEBUG)
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} --expt-relaxed-constexpr ${TF_CXXFLAGS} -Xcompiler -fPIC")
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 cuda_add_library(cuda_gpu_backend ${SRCS_LIST} ${HEADERS_LIST})

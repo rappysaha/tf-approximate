@@ -34,8 +34,8 @@ limitations under the License.
 #include "cuComplex.h"
 #include "cuda.h"
 #endif
-#include "tensorflow/core/platform/types.h"
 #include "gpu_cuda_alias.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
 
@@ -46,7 +46,7 @@ namespace tensorflow {
 // block us from creating a debug build
 #if TENSORFLOW_USE_ROCM
 #undef assert
-#define assert(x) \
+#define assert(x)                                                              \
   {}
 #endif
 
@@ -54,16 +54,15 @@ namespace detail {
 
 // Helper for range-based for loop using 'delta' increments.
 // Usage: see GpuGridRange?() functions below.
-template <typename T>
-class GpuGridRange {
+template <typename T> class GpuGridRange {
   struct Iterator {
     __device__ Iterator(T index, T delta) : index_(index), delta_(delta) {}
     __device__ T operator*() const { return index_; }
-    __device__ Iterator& operator++() {
+    __device__ Iterator &operator++() {
       index_ += delta_;
       return *this;
     }
-    __device__ bool operator!=(const Iterator& other) const {
+    __device__ bool operator!=(const Iterator &other) const {
       bool greater = index_ > other.index_;
       bool less = index_ < other.index_;
       // Anything past an end iterator (delta_ == 0) is equal.
@@ -77,29 +76,28 @@ class GpuGridRange {
       return less || greater;
     }
 
-   private:
+  private:
     T index_;
     const T delta_;
   };
 
- public:
+public:
   __device__ GpuGridRange(T begin, T delta, T end)
       : begin_(begin), delta_(delta), end_(end) {}
 
   __device__ Iterator begin() const { return Iterator{begin_, delta_}; }
   __device__ Iterator end() const { return Iterator{end_, 0}; }
 
- private:
+private:
   T begin_;
   T delta_;
   T end_;
 };
 
 #ifndef TENSORFLOW_USE_ROCM
-template <typename... T>
-using CudaGridRange = GpuGridRange<T...>;
+template <typename... T> using CudaGridRange = GpuGridRange<T...>;
 #endif
-}  // namespace detail
+} // namespace detail
 
 // Helper to visit indices in the range 0 <= i < count, using the x-coordinate
 // of the global thread index. That is, each index i is visited by all threads
@@ -142,9 +140,9 @@ __device__ inline unsigned GpuLaneId() {
 #if GOOGLE_CUDA
 #if __clang__
   return __nvvm_read_ptx_sreg_laneid();
-#else   // __clang__
+#else  // __clang__
   asm("mov.u32 %0, %%laneid;" : "=r"(lane_id));
-#endif  // __clang__
+#endif // __clang__
 #elif TENSORFLOW_USE_ROCM
   lane_id = __lane_id();
 #endif
@@ -224,7 +222,7 @@ __device__ inline unsigned GpuShuffleXorGetSrcLane(int lane_mask, int width) {
 }
 CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuShuffleXorGetSrcLane,
                                   CudaShuffleXorGetSrcLane);
-}  // namespace detail
+} // namespace detail
 
 // For all *_sync wrappers below, it is illegal to synchronize threads from
 // different program locations, because that is not supported before sm_70.
@@ -251,7 +249,7 @@ __device__ inline unsigned GpuBallotSync(unsigned mask, int pred) {
 #if CUDA_VERSION >= 9000
   return __ballot_sync(mask, pred);
 #else
-  return __ballot(pred) & mask;  // Apply mask to match __ballot_sync's spec.
+  return __ballot(pred) & mask; // Apply mask to match __ballot_sync's spec.
 #endif
 }
 CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuBallotSync, CudaBallotSync);
@@ -460,8 +458,7 @@ __device__ inline double GpuShuffleXorSync(unsigned mask, double value,
 CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuShuffleXorSync, CudaShuffleXorSync);
 
 // Wrapper for __ldg.
-template <typename T>
-__host__ __device__ T GpuLdg(const T* address) {
+template <typename T> __host__ __device__ T GpuLdg(const T *address) {
 #if __CUDA_ARCH__ >= 350
   return __ldg(address);
 #else
@@ -469,24 +466,24 @@ __host__ __device__ T GpuLdg(const T* address) {
 #endif
 }
 
-__host__ __device__ inline bool GpuLdg(const bool* address) {
-  return GpuLdg(reinterpret_cast<const char*>(address)) != 0;
+__host__ __device__ inline bool GpuLdg(const bool *address) {
+  return GpuLdg(reinterpret_cast<const char *>(address)) != 0;
 }
 
-__host__ __device__ inline std::complex<float> GpuLdg(
-    const std::complex<float>* address) {
+__host__ __device__ inline std::complex<float>
+GpuLdg(const std::complex<float> *address) {
 #if __CUDA_ARCH__ >= 350
-  float2 mem = __ldg(reinterpret_cast<const float2*>(address));
+  float2 mem = __ldg(reinterpret_cast<const float2 *>(address));
   return std::complex<float>(mem.x, mem.y);
 #else
   return *address;
 #endif
 }
 
-__host__ __device__ inline std::complex<double> GpuLdg(
-    const std::complex<double>* address) {
+__host__ __device__ inline std::complex<double>
+GpuLdg(const std::complex<double> *address) {
 #if __CUDA_ARCH__ >= 350
-  double2 mem = __ldg(reinterpret_cast<const double2*>(address));
+  double2 mem = __ldg(reinterpret_cast<const double2 *>(address));
   return std::complex<double>(mem.x, mem.y);
 #else
   return *address;
@@ -497,8 +494,7 @@ CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuLdg, CudaLdg);
 // Zeroes count elements starting at ptr using all threads of a 1-D grid.
 // Note: this function does not synchronize, and therefore the memory range is
 // not guaranteed to be zero until the next kernel launch.
-template <typename T>
-__global__ void SetZero(const int count, T* ptr) {
+template <typename T> __global__ void SetZero(const int count, T *ptr) {
   // Check that the grid is one dimensional and index doesn't overflow.
   assert(blockDim.y == 1);
   assert(blockDim.z == 1);
@@ -510,7 +506,7 @@ __global__ void SetZero(const int count, T* ptr) {
 
 // Helper to set all tensor entries to a specific value.
 template <typename T>
-__global__ void SetToValue(const int count, T* ptr, T value) {
+__global__ void SetToValue(const int count, T *ptr, T value) {
   // Check that the grid is one dimensional and index doesn't overflow.
   assert(blockDim.y == 1);
   assert(blockDim.z == 1);
@@ -523,7 +519,7 @@ __global__ void SetToValue(const int count, T* ptr, T value) {
 namespace detail {
 // Helper function for atomic accumulation implemented as CAS.
 template <typename T, typename F>
-__device__ T GpuAtomicCasHelper(T* ptr, F accumulate) {
+__device__ T GpuAtomicCasHelper(T *ptr, F accumulate) {
   T old = *ptr;
   T assumed;
   do {
@@ -537,28 +533,28 @@ CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuAtomicCasHelper, CudaAtomicCasHelper);
 // Overload for floating point (using integer comparison to handle NaN
 // correctly).
 template <typename F>
-__device__ float GpuAtomicCasHelper(float* ptr, F accumulate) {
+__device__ float GpuAtomicCasHelper(float *ptr, F accumulate) {
   return __int_as_float(
-      GpuAtomicCasHelper(reinterpret_cast<int32*>(ptr), [accumulate](int32 a) {
+      GpuAtomicCasHelper(reinterpret_cast<int32 *>(ptr), [accumulate](int32 a) {
         return __float_as_int(accumulate(__int_as_float(a)));
       }));
 }
 template <typename F>
-__device__ double GpuAtomicCasHelper(double* ptr, F accumulate) {
+__device__ double GpuAtomicCasHelper(double *ptr, F accumulate) {
 #if TENSORFLOW_USE_ROCM
   // FIXME: remove the workaround below once bug is fixed.
   // HIP has a bug in the implementation of __longlong_as_double
   // So workaround it by using reinterpret_cast<double*>.
   uint64_t result =
-      GpuAtomicCasHelper(reinterpret_cast<tensorflow::uint64*>(ptr),
+      GpuAtomicCasHelper(reinterpret_cast<tensorflow::uint64 *>(ptr),
                          [accumulate](tensorflow::uint64 a) {
                            return __double_as_longlong(
-                               accumulate(*(reinterpret_cast<double*>(&a))));
+                               accumulate(*(reinterpret_cast<double *>(&a))));
                          });
-  return *(reinterpret_cast<double*>(&result));
+  return *(reinterpret_cast<double *>(&result));
 #else
   return __longlong_as_double(GpuAtomicCasHelper(
-      reinterpret_cast<tensorflow::uint64*>(ptr),
+      reinterpret_cast<tensorflow::uint64 *>(ptr),
       [accumulate](tensorflow::uint64 a) {
         return __double_as_longlong(accumulate(__longlong_as_double(a)));
       }));
@@ -578,16 +574,16 @@ __device__ double GpuAtomicCasHelper(double* ptr, F accumulate) {
 //
 // Note: Assumes little endian.
 template <typename F>
-__device__ Eigen::half GpuAtomicCasHelper(Eigen::half* ptr, F accumulate) {
+__device__ Eigen::half GpuAtomicCasHelper(Eigen::half *ptr, F accumulate) {
 #if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__)
   static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "Not little endian");
 #endif
   namespace half_impl = Eigen::half_impl;
   intptr_t intptr = reinterpret_cast<intptr_t>(ptr);
-  assert(!(intptr & 0x1));  // should be 2-aligned.
+  assert(!(intptr & 0x1)); // should be 2-aligned.
   if (intptr & 0x2) {
     // The half is in the second part of the uint32 (upper 16 bits).
-    uint32* address = reinterpret_cast<uint32*>(intptr - 2);
+    uint32 *address = reinterpret_cast<uint32 *>(intptr - 2);
     uint32 result = GpuAtomicCasHelper(address, [accumulate](uint32 arg) {
       unsigned short high = static_cast<unsigned short>(arg >> 16);
       Eigen::half acc = accumulate(half_impl::raw_uint16_to_half(high));
@@ -596,7 +592,7 @@ __device__ Eigen::half GpuAtomicCasHelper(Eigen::half* ptr, F accumulate) {
     return half_impl::raw_uint16_to_half(static_cast<uint16>(result >> 16));
   } else {
     // The half is in the first part of the uint32 (lower 16 bits).
-    uint32* address = reinterpret_cast<uint32*>(intptr);
+    uint32 *address = reinterpret_cast<uint32 *>(intptr);
     uint32 result = GpuAtomicCasHelper(address, [accumulate](uint32 arg) {
       unsigned short low = static_cast<unsigned short>(arg & 0xffff);
       Eigen::half acc = accumulate(half_impl::raw_uint16_to_half(low));
@@ -606,32 +602,56 @@ __device__ Eigen::half GpuAtomicCasHelper(Eigen::half* ptr, F accumulate) {
   }
 }
 
+// Specialization for tensorflow::uint64 to handle TSL/modern TensorFlow
+// compatibility
+template <typename F>
+__device__ tensorflow::uint64 GpuAtomicCasHelper(tensorflow::uint64 *ptr,
+                                                 F accumulate) {
+  unsigned long long int old = *reinterpret_cast<unsigned long long int *>(ptr);
+  unsigned long long int assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(reinterpret_cast<unsigned long long int *>(ptr), assumed,
+                    static_cast<unsigned long long int>(
+                        accumulate(static_cast<tensorflow::uint64>(assumed))));
+  } while (assumed != old);
+  return static_cast<tensorflow::uint64>(old);
+}
+
 template <typename From, typename To>
 using ToTypeIfConvertible =
     typename std::enable_if<std::is_convertible<From, To>::value, To>::type;
 
-}  // namespace detail
+} // namespace detail
 
 // CUDA provides atomic ops, but not for all types.  We provide wrappers
 // for some ops and provide implementation for all reasonable types.
 
 template <typename T, typename U>
-__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicAdd(T* ptr, U value) {
+__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicAdd(T *ptr, U value) {
   return atomicAdd(ptr, value);
 }
 
-__device__ inline Eigen::half GpuAtomicAdd(Eigen::half* ptr,
+__device__ inline Eigen::half GpuAtomicAdd(Eigen::half *ptr,
                                            Eigen::half value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](Eigen::half a) { return a + value; });
 }
 
 #if (__CUDA_ARCH__ < 600) || TENSORFLOW_USE_ROCM
-__device__ inline double GpuAtomicAdd(double* ptr, double value) {
+__device__ inline double GpuAtomicAdd(double *ptr, double value) {
   return detail::GpuAtomicCasHelper(ptr,
                                     [value](double a) { return a + value; });
 }
 #endif
+
+// Specialization for tensorflow::uint64 to handle TSL/modern TensorFlow
+// compatibility
+__device__ inline tensorflow::uint64 GpuAtomicAdd(tensorflow::uint64 *ptr,
+                                                  tensorflow::uint64 value) {
+  return detail::GpuAtomicCasHelper(
+      ptr, [value](tensorflow::uint64 a) { return a + value; });
+}
 
 // GpuAtomicAdd
 // Specializations of GpuAtomicAdd for complex types, which GpuAtomicAdd does
@@ -642,16 +662,16 @@ __device__ inline double GpuAtomicAdd(double* ptr, double value) {
 
 // ROCM TODO support GpuAtomicAdd for std::complex<>
 #if GOOGLE_CUDA
-__device__ inline std::complex<float> GpuAtomicAdd(std::complex<float>* ptr,
+__device__ inline std::complex<float> GpuAtomicAdd(std::complex<float> *ptr,
                                                    std::complex<float> value) {
-  auto ptr_scalar = reinterpret_cast<float*>(ptr);
+  auto ptr_scalar = reinterpret_cast<float *>(ptr);
   return std::complex<float>(GpuAtomicAdd(ptr_scalar, value.real()),
                              GpuAtomicAdd(ptr_scalar + 1, value.imag()));
 }
 
-__device__ inline std::complex<double> GpuAtomicAdd(
-    std::complex<double>* ptr, std::complex<double> value) {
-  auto ptr_scalar = reinterpret_cast<double*>(ptr);
+__device__ inline std::complex<double>
+GpuAtomicAdd(std::complex<double> *ptr, std::complex<double> value) {
+  auto ptr_scalar = reinterpret_cast<double *>(ptr);
   return std::complex<double>(GpuAtomicAdd(ptr_scalar, value.real()),
                               GpuAtomicAdd(ptr_scalar + 1, value.imag()));
 }
@@ -660,25 +680,25 @@ CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuAtomicAdd, CudaAtomicAdd);
 
 // GpuAtomicSub
 template <typename T, typename U>
-__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicSub(T* ptr, U value) {
+__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicSub(T *ptr, U value) {
   return atomicSub(ptr, value);
 }
 
 // Specializations of substraction which add the negative value.
-__device__ inline float GpuAtomicSub(float* ptr, float value) {
+__device__ inline float GpuAtomicSub(float *ptr, float value) {
   return GpuAtomicAdd(ptr, -value);
 }
 
-__device__ inline double GpuAtomicSub(double* ptr, double value) {
+__device__ inline double GpuAtomicSub(double *ptr, double value) {
   return GpuAtomicAdd(ptr, -value);
 }
 
-__device__ inline tensorflow::uint64 GpuAtomicSub(tensorflow::uint64* ptr,
+__device__ inline tensorflow::uint64 GpuAtomicSub(tensorflow::uint64 *ptr,
                                                   tensorflow::uint64 value) {
   return GpuAtomicAdd(ptr, -value);
 }
 
-__device__ inline Eigen::half GpuAtomicSub(Eigen::half* ptr,
+__device__ inline Eigen::half GpuAtomicSub(Eigen::half *ptr,
                                            Eigen::half value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](Eigen::half a) { return a - value; });
@@ -687,7 +707,7 @@ CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuAtomicSub, CudaAtomicSub);
 
 // GpuAtomicMax
 template <typename T, typename U>
-__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicMax(T* ptr, U value) {
+__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicMax(T *ptr, U value) {
   return atomicMax(ptr, value);
 }
 
@@ -706,38 +726,38 @@ __device__ detail::ToTypeIfConvertible<U, T> GpuAtomicMax(T* ptr, U value) {
  *
  */
 
-__device__ inline float GpuAtomicMax(float* ptr, float value) {
+__device__ inline float GpuAtomicMax(float *ptr, float value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](float a) { return fmaxf(a, value); });
 }
 
-__device__ inline double GpuAtomicMax(double* ptr, double value) {
+__device__ inline double GpuAtomicMax(double *ptr, double value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](double a) { return fmax(a, value); });
 }
 
 #else
 
-__device__ inline float GpuAtomicMax(float* ptr, float value) {
+__device__ inline float GpuAtomicMax(float *ptr, float value) {
   return detail::GpuAtomicCasHelper(ptr,
                                     [value](float a) { return max(a, value); });
 }
 
-__device__ inline double GpuAtomicMax(double* ptr, double value) {
+__device__ inline double GpuAtomicMax(double *ptr, double value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](double a) { return max(a, value); });
 }
 
 #endif
 
-__device__ inline Eigen::half GpuAtomicMax(Eigen::half* ptr,
+__device__ inline Eigen::half GpuAtomicMax(Eigen::half *ptr,
                                            Eigen::half value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](Eigen::half a) { return max(a, value); });
 }
 
 #if __CUDA_ARCH__ < 320
-__device__ inline tensorflow::uint64 GpuAtomicMax(tensorflow::uint64* ptr,
+__device__ inline tensorflow::uint64 GpuAtomicMax(tensorflow::uint64 *ptr,
                                                   tensorflow::uint64 value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](tensorflow::uint64 a) { return max(a, value); });
@@ -747,7 +767,7 @@ CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuAtomicMax, CudaAtomicMax);
 
 // GpuAtomicMin
 template <typename T, typename U>
-__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicMin(T* ptr, U value) {
+__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicMin(T *ptr, U value) {
   return atomicMin(ptr, value);
 }
 
@@ -766,38 +786,38 @@ __device__ detail::ToTypeIfConvertible<U, T> GpuAtomicMin(T* ptr, U value) {
  *
  */
 
-__device__ inline float GpuAtomicMin(float* ptr, float value) {
+__device__ inline float GpuAtomicMin(float *ptr, float value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](float a) { return fminf(a, value); });
 }
 
-__device__ inline double GpuAtomicMin(double* ptr, double value) {
+__device__ inline double GpuAtomicMin(double *ptr, double value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](double a) { return fmin(a, value); });
 }
 
 #else
 
-__device__ inline float GpuAtomicMin(float* ptr, float value) {
+__device__ inline float GpuAtomicMin(float *ptr, float value) {
   return detail::GpuAtomicCasHelper(ptr,
                                     [value](float a) { return min(a, value); });
 }
 
-__device__ inline double GpuAtomicMin(double* ptr, double value) {
+__device__ inline double GpuAtomicMin(double *ptr, double value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](double a) { return min(a, value); });
 }
 
 #endif
 
-__device__ inline Eigen::half GpuAtomicMin(Eigen::half* ptr,
+__device__ inline Eigen::half GpuAtomicMin(Eigen::half *ptr,
                                            Eigen::half value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](Eigen::half a) { return min(a, value); });
 }
 
 #if __CUDA_ARCH__ < 320
-__device__ inline tensorflow::uint64 GpuAtomicMin(tensorflow::uint64* ptr,
+__device__ inline tensorflow::uint64 GpuAtomicMin(tensorflow::uint64 *ptr,
                                                   tensorflow::uint64 value) {
   return detail::GpuAtomicCasHelper(
       ptr, [value](tensorflow::uint64 a) { return min(a, value); });
@@ -807,79 +827,79 @@ CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuAtomicMin, CudaAtomicMin);
 
 // GpuAtomicMul
 template <typename T, typename U>
-__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicMul(T* ptr, U value) {
+__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicMul(T *ptr, U value) {
   return detail::GpuAtomicCasHelper(ptr, [value](T a) { return a * value; });
 }
 CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuAtomicMul, CudaAtomicMul);
 
 // GpuAtomicDiv
 template <typename T, typename U>
-__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicDiv(T* ptr, U value) {
+__device__ detail::ToTypeIfConvertible<U, T> GpuAtomicDiv(T *ptr, U value) {
   return detail::GpuAtomicCasHelper(ptr, [value](T a) { return a / value; });
 }
 CREATE_CUDA_DEVICE_FUNCTION_ALIAS(GpuAtomicDiv, CudaAtomicDiv);
 
 // Operator overloads for complex numbers.
 #if GOOGLE_CUDA
-__device__ inline std::complex<float> operator+(const std::complex<float>& a,
-                                                const std::complex<float>& b) {
+__device__ inline std::complex<float> operator+(const std::complex<float> &a,
+                                                const std::complex<float> &b) {
   auto result = cuCaddf(make_cuComplex(a.real(), a.imag()),
                         make_cuComplex(b.real(), b.imag()));
   return std::complex<float>(result.x, result.y);
 }
 
-__device__ inline std::complex<float> operator-(const std::complex<float>& a,
-                                                const std::complex<float>& b) {
+__device__ inline std::complex<float> operator-(const std::complex<float> &a,
+                                                const std::complex<float> &b) {
   auto result = cuCsubf(make_cuComplex(a.real(), a.imag()),
                         make_cuComplex(b.real(), b.imag()));
   return std::complex<float>(result.x, result.y);
 }
 
-__device__ inline std::complex<float> operator*(const std::complex<float>& a,
-                                                const std::complex<float>& b) {
+__device__ inline std::complex<float> operator*(const std::complex<float> &a,
+                                                const std::complex<float> &b) {
   auto result = cuCmulf(make_cuComplex(a.real(), a.imag()),
                         make_cuComplex(b.real(), b.imag()));
   return std::complex<float>(result.x, result.y);
 }
 
-__device__ inline std::complex<float> operator/(const std::complex<float>& a,
-                                                const std::complex<float>& b) {
+__device__ inline std::complex<float> operator/(const std::complex<float> &a,
+                                                const std::complex<float> &b) {
   auto result = cuCdivf(make_cuComplex(a.real(), a.imag()),
                         make_cuComplex(b.real(), b.imag()));
   return std::complex<float>(result.x, result.y);
 }
 
-__device__ inline std::complex<double> operator+(
-    const std::complex<double>& a, const std::complex<double>& b) {
+__device__ inline std::complex<double>
+operator+(const std::complex<double> &a, const std::complex<double> &b) {
   auto result = cuCadd(make_cuDoubleComplex(a.real(), a.imag()),
                        make_cuDoubleComplex(b.real(), b.imag()));
   return std::complex<double>(result.x, result.y);
 }
 
-__device__ inline std::complex<double> operator-(
-    const std::complex<double>& a, const std::complex<double>& b) {
+__device__ inline std::complex<double>
+operator-(const std::complex<double> &a, const std::complex<double> &b) {
   auto result = cuCsub(make_cuDoubleComplex(a.real(), a.imag()),
                        make_cuDoubleComplex(b.real(), b.imag()));
   return std::complex<double>(result.x, result.y);
 }
 
-__device__ inline std::complex<double> operator*(
-    const std::complex<double>& a, const std::complex<double>& b) {
+__device__ inline std::complex<double>
+operator*(const std::complex<double> &a, const std::complex<double> &b) {
   auto result = cuCmul(make_cuDoubleComplex(a.real(), a.imag()),
                        make_cuDoubleComplex(b.real(), b.imag()));
   return std::complex<double>(result.x, result.y);
 }
 
-__device__ inline std::complex<double> operator/(
-    const std::complex<double>& a, const std::complex<double>& b) {
+__device__ inline std::complex<double>
+operator/(const std::complex<double> &a, const std::complex<double> &b) {
   auto result = cuCdiv(make_cuDoubleComplex(a.real(), a.imag()),
                        make_cuDoubleComplex(b.real(), b.imag()));
   return std::complex<double>(result.x, result.y);
 }
-#endif  // GOOGLE_CUDA
+#endif // GOOGLE_CUDA
 
-}  // namespace tensorflow
+} // namespace tensorflow
 
-#endif  // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
+#endif // GOOGLE_CUDA || TENSORFLOW_USE_ROCM
 
 #endif // GPU_DEVICE_FUNCTIONS_H

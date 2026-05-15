@@ -54,7 +54,8 @@ include_directories(${INCLUDE_DIRECTORIES})
 
 add_subdirectory(containers)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(${PROJECT_NAME} SHARED ${SRCS_LIST} ${HEADERS_LIST})
 target_compile_options(${PROJECT_NAME} PRIVATE ${TF_CXXFLAGS})

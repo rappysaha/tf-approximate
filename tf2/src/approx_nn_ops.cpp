@@ -6,9 +6,9 @@
 // $Date:       $2019-12-19
 //============================================================================//
 
+#include <tensorflow/core/framework/common_shape_fns.h>
 #include <tensorflow/core/framework/op.h>
 #include <tensorflow/core/framework/shape_inference.h>
-#include <tensorflow/core/framework/common_shape_fns.h>
 
 using namespace tensorflow;
 
@@ -17,8 +17,8 @@ REGISTER_OP("ExampleOp")
     .Input("input: T")
     .Output("output: T")
     .SetShapeFn([](::tensorflow::shape_inference::InferenceContext *c) {
-        c->set_output(0, c->input(0));
-        return Status::OK();
+      c->set_output(0, c->input(0));
+      return absl::OkStatus();
     });
 
 REGISTER_OP("ApproxConv2D")
