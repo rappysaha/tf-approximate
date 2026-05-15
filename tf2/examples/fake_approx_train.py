@@ -1,16 +1,31 @@
-##========== Copyright (c) 2020, Filip Vaverka, All rights reserved. =========##
+## ========== Copyright (c) 2020, Filip Vaverka, All rights reserved. =========##
 ##
-## Purpose:     Train LeNet-5 on MNIST dataset.
+# Purpose:     Train LeNet-5 on MNIST dataset.
 ##
-## $NoKeywords: $ApproxTF $fake_approx_train.py
-## $Date:       $2020-02-25
-##============================================================================##
+# $NoKeywords: $ApproxTF $fake_approx_train.py
+# $Date:       $2020-02-25
+## ============================================================================##
 
+import sys
+import os
+import importlib.util
 import datetime
 import tensorflow as tf
-from tensorflow.keras.callbacks import TensorBoard
+# Use attribute access on the imported tensorflow module to obtain TensorBoard
+# instead of `from tensorflow.keras...` which triggers a submodule import that
+# can conflict with a local `keras` package on PYTHONPATH.
+TensorBoard = tf.keras.callbacks.TensorBoard
 
-from keras.layers.fake_approx_convolutional import FakeApproxConv2D
+
+# Load local FakeApproxConv2D module directly to avoid import conflicts
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+_local_layer_path = os.path.abspath(os.path.join(
+    _this_dir, '..', 'python', 'keras', 'layers', 'fake_approx_convolutional.py'))
+spec = importlib.util.spec_from_file_location(
+    "fake_approx_convolutional", _local_layer_path)
+fake_mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fake_mod)
+FakeApproxConv2D = fake_mod.FakeApproxConv2D
 
 # cuDNN can sometimes fail to initialize when TF reserves all of the GPU memory
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -56,9 +71,11 @@ model.compile(optimizer='adam',
               metrics=['accuracy'])
 
 # Connect to Tensorboard and train the model
-tensorboard = TensorBoard(log_dir="tflogs/{}".format(datetime.datetime.now().replace(microsecond=0).isoformat()))
+tensorboard = TensorBoard(
+    log_dir="tflogs/{}".format(datetime.datetime.now().replace(microsecond=0).isoformat()))
 
-model.fit(x_train, y_train, validation_data=(x_test, y_test), epochs=6, callbacks=[tensorboard])
+model.fit(x_train, y_train, validation_data=(
+    x_test, y_test), epochs=6, callbacks=[tensorboard])
 
 print('================================================================================')
 print('Testing trained model...')
@@ -66,4 +83,4 @@ score = model.evaluate(x_test, y_test, verbose=0)
 print('Test loss:', score[0])
 print('Test accuracy:', score[1])
 
-model.save_weights('lenet5_weights')
+model.save_weights('models/lenet5_weights')

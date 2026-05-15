@@ -11,3 +11,6 @@ cpu/axqconv/tune
 cpu/axqconv/*.o
 
 tf2/build
+tf2/.tf2
+tf2/tflogs
+tf2/models

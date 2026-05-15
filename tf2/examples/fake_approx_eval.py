@@ -1,17 +1,32 @@
-##========== Copyright (c) 2020, Filip Vaverka, All rights reserved. =========##
+## ========== Copyright (c) 2020, Filip Vaverka, All rights reserved. =========##
 ##
-## Purpose:     Evaluate LeNet-5 with approximate Conv2D layers.
+# Purpose:     Evaluate LeNet-5 with approximate Conv2D layers.
 ##
-## $NoKeywords: $ApproxTF $fake_approx_eval.py
-## $Date:       $2020-02-25
-##============================================================================##
+# $NoKeywords: $ApproxTF $fake_approx_eval.py
+# $Date:       $2020-02-25
+## ============================================================================##
 
+import sys
+import os
+import importlib.util
 import datetime
 import argparse
 import tensorflow as tf
-from tensorflow.keras.callbacks import TensorBoard
+# Use attribute access on the imported tensorflow module to obtain TensorBoard
+# instead of `from tensorflow.keras...` which triggers a submodule import that
+# can conflict with a local `keras` package on PYTHONPATH.
+TensorBoard = tf.keras.callbacks.TensorBoard
 
-from keras.layers.fake_approx_convolutional import FakeApproxConv2D
+
+# Load local FakeApproxConv2D module directly to avoid import conflicts
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+_local_layer_path = os.path.abspath(os.path.join(
+    _this_dir, '..', 'python', 'keras', 'layers', 'fake_approx_convolutional.py'))
+spec = importlib.util.spec_from_file_location(
+    "fake_approx_convolutional", _local_layer_path)
+fake_mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fake_mod)
+FakeApproxConv2D = fake_mod.FakeApproxConv2D
 
 # cuDNN can sometimes fail to initialize when TF reserves all of the GPU memory
 physical_devices = tf.config.list_physical_devices('GPU')
@@ -22,7 +37,8 @@ except:
 
 # Process arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--mtab_file', type=str, help='Approximate multiplication table (8x8)', default='')
+parser.add_argument('--mtab_file', type=str,
+                    help='Approximate multiplication table (8x8)', default='')
 
 args = parser.parse_args()
 
@@ -50,9 +66,11 @@ y_train = y_train[:-10000]
 # NOTE: Conv2D layers are replaced with our FakeApproxConv2D which simulates convolutional layer with approximate
 #       8bit fixed-point multiplication.
 approx_model = tf.keras.Sequential([
-    FakeApproxConv2D(filters=6, kernel_size=(3, 3), activation='relu', mul_map_file=args.mtab_file),
+    FakeApproxConv2D(filters=6, kernel_size=(
+        3, 3), activation='relu', mul_map_file=args.mtab_file),
     tf.keras.layers.AveragePooling2D(),
-    FakeApproxConv2D(filters=16, kernel_size=(3, 3), activation='relu', mul_map_file=args.mtab_file),
+    FakeApproxConv2D(filters=16, kernel_size=(
+        3, 3), activation='relu', mul_map_file=args.mtab_file),
     tf.keras.layers.Flatten(),
     tf.keras.layers.Dense(120, activation='relu'),
     tf.keras.layers.Dense(84, activation='relu'),
@@ -61,11 +79,11 @@ approx_model = tf.keras.Sequential([
 
 # Compile the model
 approx_model.compile(optimizer='adam',
-              loss='sparse_categorical_crossentropy',
-              metrics=['accuracy'])
+                     loss='sparse_categorical_crossentropy',
+                     metrics=['accuracy'])
 approx_model.build(input_shape=(0, 28, 28, 1))
 
-approx_model.load_weights('lenet5_weights')
+approx_model.load_weights('models/lenet5_weights')
 
 # NOTE: Weights can also be directly copied from the trained model (instead of loading stored ones)
 # for approx_layer, layer in zip(approx_model.layers, model.layers):
