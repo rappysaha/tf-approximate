@@ -14,3 +14,4 @@ tf2/build
 tf2/.tf2
 tf2/tflogs
 tf2/models
+tf2/examples/axmul_8x8

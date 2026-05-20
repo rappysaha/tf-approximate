@@ -1,12 +1,12 @@
-##========== Copyright (c) 2020, Filip Vaverka, All rights reserved. =========##
+## ========== Copyright (c) 2020, Filip Vaverka, All rights reserved. =========##
 ##
-## Purpose:     Approximate Conv2D Keras layer incorporating batch level
-##              quantization.
-##              Gradients are computed with accurate Conv2D implementation.
+# Purpose:     Approximate Conv2D Keras layer incorporating batch level
+# quantization.
+# Gradients are computed with accurate Conv2D implementation.
 ##
-## $NoKeywords: $ApproxTF $fake_approx_convolutional.py
-## $Date:       $2020-02-25
-##============================================================================##
+# $NoKeywords: $ApproxTF $fake_approx_convolutional.py
+# $Date:       $2020-02-25
+## ============================================================================##
 
 import os
 from abc import abstractmethod
@@ -29,7 +29,33 @@ from tensorflow.python.keras.layers.convolutional import Conv
 from tensorflow.python.util.tf_export import keras_export
 from tensorflow.python.keras.engine.input_spec import InputSpec
 
-approx_op_module = tf.load_op_library('libApproxGPUOpsTF.so')
+
+def _load_approx_op_module():
+    lib_name = 'libApproxGPUOpsTF.so'
+    this_dir = os.path.dirname(os.path.abspath(__file__))
+    tf2_root = os.path.abspath(os.path.join(this_dir, '..', '..', '..'))
+
+    candidates = [
+        os.environ.get('APPROX_TF_OP_PATH'),
+        os.path.join(tf2_root, 'build', lib_name),
+        os.path.join(os.getcwd(), lib_name),
+        lib_name,
+    ]
+
+    last_error = None
+    for candidate in candidates:
+        if not candidate:
+            continue
+
+        try:
+            return tf.load_op_library(candidate)
+        except Exception as e:
+            last_error = e
+
+    raise last_error
+
+
+approx_op_module = _load_approx_op_module()
 
 
 class _BaseNonAtrousApproxConvolution(object):
@@ -154,7 +180,8 @@ class FakeApproxConvolution2D(nn_ops.Convolution):
             data_format=data_format)
 
     def set_min_max_vars(self, input_min, input_max, filter_min, filter_max):
-        self.conv_op.call.set_min_max_vars(input_min, input_max, filter_min, filter_max)
+        self.conv_op.call.set_min_max_vars(
+            input_min, input_max, filter_min, filter_max)
 
     def set_quantized_filter(self, quantized_filter):
         self.conv_op.call.set_quantized_filter(quantized_filter)
@@ -174,7 +201,8 @@ class FakeApproxConvolution2D(nn_ops.Convolution):
 
 
 @keras_export('keras.layers.FakeApproxConv2D', 'keras.layers.FakeApproxConvolution2D')
-class FakeApproxConv2D(Conv):
+@tf.keras.utils.register_keras_serializable(package='ApproxTF')
+class FakeApproxConv2D(tf.keras.layers.Conv2D):
     def __init__(self,
                  filters,
                  kernel_size,
@@ -198,7 +226,6 @@ class FakeApproxConv2D(Conv):
         self.mul_map_file = mul_map_file
 
         super(FakeApproxConv2D, self).__init__(
-            rank=2,
             filters=filters,
             kernel_size=kernel_size,
             strides=strides,
@@ -218,7 +245,21 @@ class FakeApproxConv2D(Conv):
 
     def build(self, input_shape):
         super().build(input_shape)
-        self._convolution_op = None  # Native convolution was assigned as this point and will be replaced with our own.
+        # Native convolution was assigned as this point and will be replaced with our own.
+        self._convolution_op = None
+
+    def build_from_config(self, config):
+        input_shape = config.get('input_shape')
+        if input_shape is not None and not self.built:
+            self.build(input_shape)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'num_bits': self.num_bits,
+            'mul_map_file': self.mul_map_file,
+        })
+        return config
 
     def call(self, inputs):
         if self.padding == 'causal':
@@ -254,13 +295,15 @@ class FakeApproxConv2D(Conv):
                 mul_map_file=self.mul_map_file)
 
         # Set additional inputs used by inner convolution operation
-        self._convolution_op.set_min_max_vars(input_min, input_max, kernel_min, kernel_max)
+        self._convolution_op.set_min_max_vars(
+            input_min, input_max, kernel_min, kernel_max)
         self._convolution_op.set_quantized_filter(quantized_kernel)
 
         # Reuse standard call for convolution (with quantized inputs)
         return super().call(quantized_input)
 
 
+@ops.RegisterGradient("ApproxConv2DWithMinMaxVars")
 @ops.RegisterGradient("FakeApproxConv2D")
 def _FakeApproxConv2DGrad(op, grad):
     """Gradient function for FakeApproxConv2D."""
@@ -278,25 +321,28 @@ def _FakeApproxConv2DGrad(op, grad):
     # to use the nn_ops functions, we would have to convert `padding` and
     # `explicit_paddings` into a single `padding` parameter, increasing overhead
     # in Eager mode.
-    return [
-        gen_nn_ops.conv2d_backprop_input(
-            shape_0,
-            op.inputs[1],
-            grad,
-            dilations=dilations,
-            strides=strides,
-            padding=padding,
-            explicit_paddings=explicit_paddings,
-            use_cudnn_on_gpu=use_cudnn_on_gpu,
-            data_format=data_format),
-        gen_nn_ops.conv2d_backprop_filter(
-            op.inputs[0],
-            shape_1,
-            grad,
-            dilations=dilations,
-            strides=strides,
-            padding=padding,
-            explicit_paddings=explicit_paddings,
-            use_cudnn_on_gpu=use_cudnn_on_gpu,
-            data_format=data_format)
-    ]
+    # The op has 6 inputs: input, filter, input_min, input_max, filter_min, filter_max
+    # Return gradients for each input. For min/max vars we return None.
+    grad_input = gen_nn_ops.conv2d_backprop_input(
+        shape_0,
+        op.inputs[1],
+        grad,
+        dilations=dilations,
+        strides=strides,
+        padding=padding,
+        explicit_paddings=explicit_paddings,
+        use_cudnn_on_gpu=use_cudnn_on_gpu,
+        data_format=data_format)
+
+    grad_filter = gen_nn_ops.conv2d_backprop_filter(
+        op.inputs[0],
+        shape_1,
+        grad,
+        dilations=dilations,
+        strides=strides,
+        padding=padding,
+        explicit_paddings=explicit_paddings,
+        use_cudnn_on_gpu=use_cudnn_on_gpu,
+        data_format=data_format)
+
+    return [grad_input, grad_filter, None, None, None, None]

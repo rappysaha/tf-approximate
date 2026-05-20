@@ -83,11 +83,24 @@ approx_model.compile(optimizer='adam',
                      metrics=['accuracy'])
 approx_model.build(input_shape=(0, 28, 28, 1))
 
-approx_model.load_weights('models/lenet5_weights')
+approx_model.load_weights('models/lenet5_approx_weights')
 
 # NOTE: Weights can also be directly copied from the trained model (instead of loading stored ones)
 # for approx_layer, layer in zip(approx_model.layers, model.layers):
 #     approx_layer.set_weights(layer.get_weights())
+
+# print('================================================================================')
+# print('Training approximate model with {}'.format(args.mtab_file))
+# # Connect to Tensorboard and train the model
+# tensorboard = TensorBoard(
+#     log_dir="tflogs/{}".format(datetime.datetime.now().replace(microsecond=0).isoformat()))
+
+# approx_model.fit(x_train, y_train, validation_data=(
+#     x_test, y_test), epochs=6, callbacks=[tensorboard])
+
+# approx_model.save_weights('models/lenet5_approx_weights')
+
+# approx_model.load_weights('models/lenet5_approx_weights')
 
 print('================================================================================')
 print('Testing approximate model with {}'.format(args.mtab_file))
