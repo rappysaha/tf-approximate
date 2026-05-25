@@ -17,6 +17,10 @@ Usage:
         --imagenet_path /mnt/new_ssd/data_gabriel/ILSVRC/Data/CLS-LOC \
         --mtab_file examples/axmul_8x8/mul8u_L40.bin \
         --batch_size 16
+    python examples/fake_approx_eval_mobilenet.py \
+        --imagenet_path /mnt/new_ssd/data_gabriel/ILSVRC/Data/CLS-LOC \
+        --mtab_file tf-approximate/tf2/examples/axmul_8x8/fame/SPRIM8_41.bin \
+        --batch_size 1
 
 Expected ImageNet directory structure:
     imagenet_path/
